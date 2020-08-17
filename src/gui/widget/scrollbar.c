@@ -46,33 +46,34 @@
 
 /** 惯性滚动效果的相关数据 */
 typedef struct InertialScrollingRec_ {
-	int start_pos;			/**< 开始移动时的位置 */
-	int end_pos;			/**< 结束移动时的位置 */
-	int timer;			/**< 定时器 */
-	int interval;			/**< 定时器的间隔时间 */
-	double speed;			/**< 滚动速度 */
-	double speed_delta;		/**< 速度差（加速度） */
-	int64_t timestamp;		/**< 开始时间 */
-	LCUI_BOOL is_running;		/**< 当前效果是否正在运行 */
+	int start_pos;		/**< 开始移动时的位置 */
+	int end_pos;		/**< 结束移动时的位置 */
+	int timer;		/**< 定时器 */
+	int interval;		/**< 定时器的间隔时间 */
+	double speed;		/**< 滚动速度 */
+	double speed_delta;	/**< 速度差（加速度） */
+	int64_t timestamp;	/**< 开始时间 */
+	LCUI_BOOL is_running;	/**< 当前效果是否正在运行 */
 } InertialScrollingRec, *InertialScrolling;
 
 /** 滚动条的相关数据 */
 typedef struct LCUI_ScrollBarRec_ {
-	LCUI_Widget box;		/**< a container containing scrollbar and target, the default is the parent of scrollbar */
-	LCUI_Widget target;		/**< scroll target */
-	LCUI_Widget slider;		/**< slider of scrollbar */
-	LCUI_BOOL is_dragged;		/**< whether the target is dragged */
-	LCUI_BOOL is_draggable;		/**< whether the target can be dragged */
-	float slider_x, slider_y;	/**< 拖拽开始时的滑块位置 */
-	int mouse_x, mouse_y;		/**< 拖拽开始时的鼠标坐标 */
-	int touch_point_id;		/**< 触点的ID */
-	int direction;			/**< 滚动条的方向（垂直或水平） */
-	int scroll_step;		/**< 每次滚动的距离，主要针对使用鼠标滚轮触发的滚动 */
-	int pos;			/**< 当前的位置 */
-	int old_pos;			/**< 拖拽开始时的位置 */
-	int distance;			/**< 滚动距离 */
-	int64_t timestamp;		/**< 数据更新时间，主要针对触控拖动时的位置变化 */
-	InertialScrollingRec effect;	/**< 用于实现惯性滚动效果的相关数据 */
+	/** a container containing scrollbar and target, the default is the parent of scrollbar */
+	LCUI_Widget box;
+	LCUI_Widget target;			/**< scroll target */
+	LCUI_Widget slider;			/**< slider of scrollbar */
+	LCUI_BOOL is_dragged;			/**< whether the target is dragged */
+	LCUI_BOOL is_draggable;			/**< whether the target can be dragged */
+	LCUI_ScrollBarDirection direction;	/**< 滚动条的方向（垂直或水平） */
+	float slider_x, slider_y;		/**< 拖拽开始时的滑块位置 */
+	int mouse_x, mouse_y;			/**< 拖拽开始时的鼠标坐标 */
+	int touch_point_id;			/**< 触点的ID */
+	int scroll_step;			/**< 每次滚动的距离，主要针对使用鼠标滚轮触发的滚动 */
+	int pos;				/**< 当前的位置 */
+	int old_pos;				/**< 拖拽开始时的位置 */
+	int distance;				/**< 滚动距离 */
+	int64_t timestamp;			/**< 数据更新时间，主要针对触控拖动时的位置变化 */
+	InertialScrollingRec effect;		/**< 用于实现惯性滚动效果的相关数据 */
 } LCUI_ScrollBarRec, *LCUI_ScrollBar;
 
 static struct LCUI_ScrollbarModule {
@@ -90,6 +91,14 @@ scrollbar {
 	position: absolute;
 	background-color: #fafafa;
 	border: 1px solid #eee;
+}
+.scrollbar.horizontal {
+	right: auto;
+	top: auto;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	height: 14px;
 }
 .scrollbar-slider {
 	top: 0;
@@ -111,14 +120,6 @@ scrollbar {
 	top: 0;
 	left: 0;
 	position: relative;
-}
-.scrollbar-horizontal {
-	right: auto;
-	top: auto;
-	bottom: 0;
-	left: 0;
-	width: 100%;
-	height: 14px;
 }
 .has-horizontal-scrollbar {
 	padding-bottom: 14px;
@@ -230,7 +231,7 @@ static void Slider_OnMouseMove(LCUI_Widget slider, LCUI_WidgetEvent e,
 		return;
 	}
 	target = scrollbar->target;
-	if (scrollbar->direction == SBD_HORIZONTAL) {
+	if (scrollbar->direction == LCUI_SCROLLBAR_HORIZONTAL) {
 		y = 0;
 		x = scrollbar->slider_x;
 		x += e->motion.x - scrollbar->mouse_x;
@@ -346,7 +347,7 @@ static void ScrollBar_OnInit(LCUI_Widget w)
 
 	slider = LCUIWidget_New(NULL);
 	scrollbar = Widget_AddData(w, self.prototype, data_size);
-	scrollbar->direction = SBD_VERTICAL;
+	scrollbar->direction = LCUI_SCROLLBAR_VERTICAL;
 	scrollbar->is_dragged = FALSE;
 	scrollbar->is_draggable = FALSE;
 	scrollbar->scroll_step = 64;
@@ -372,7 +373,7 @@ static void ScrollBar_UpdateSize(LCUI_Widget w)
 	if (!scrollbar->box) {
 		return;
 	}
-	if (scrollbar->direction == SBD_HORIZONTAL) {
+	if (scrollbar->direction == LCUI_SCROLLBAR_HORIZONTAL) {
 		if (scrollbar->target) {
 			size = scrollbar->target->box.outer.width;
 		} else {
@@ -399,7 +400,7 @@ static void ScrollBar_UpdateSize(LCUI_Widget w)
 	Widget_UpdateStyle(slider, FALSE);
 	if (n < 1.0) {
 		Widget_Show(w);
-		if (scrollbar->direction == SBD_HORIZONTAL) {
+		if (scrollbar->direction == LCUI_SCROLLBAR_HORIZONTAL) {
 			Widget_AddClass(scrollbar->box,
 					"has-horizontal-scrollbar");
 		} else {
@@ -408,7 +409,7 @@ static void ScrollBar_UpdateSize(LCUI_Widget w)
 		}
 	} else {
 		Widget_Hide(w);
-		if (scrollbar->direction == SBD_HORIZONTAL) {
+		if (scrollbar->direction == LCUI_SCROLLBAR_HORIZONTAL) {
 			Widget_RemoveClass(scrollbar->box,
 					   "has-horizontal-scrollbar");
 		} else {
@@ -500,7 +501,7 @@ static void ScrollBox_OnTouch(LCUI_Widget box, LCUI_WidgetEvent e, void *arg)
 		}
 		e->cancel_bubble = TRUE;
 		pos = scrollbar->old_pos;
-		if (scrollbar->direction == SBD_HORIZONTAL) {
+		if (scrollbar->direction == LCUI_SCROLLBAR_HORIZONTAL) {
 			pos -= point->x - scrollbar->mouse_x;
 		} else {
 			pos -= point->y - scrollbar->mouse_y;
@@ -616,7 +617,7 @@ int ScrollBar_SetPosition(LCUI_Widget w, int pos)
 	}
 	new_pos = 1.0f * pos;
 	memset(&e, 0, sizeof(e));
-	if (scrollbar->direction == SBD_HORIZONTAL) {
+	if (scrollbar->direction == LCUI_SCROLLBAR_HORIZONTAL) {
 		size = scrollbar->target->box.outer.width;
 		if (scrollbar->box) {
 			box_size = scrollbar->box->box.content.width;
@@ -668,14 +669,14 @@ int ScrollBar_SetPosition(LCUI_Widget w, int pos)
 	return pos;
 }
 
-void ScrollBar_SetDirection(LCUI_Widget w, int direction)
+void ScrollBar_SetDirection(LCUI_Widget w, LCUI_ScrollBarDirection direction)
 {
 	LCUI_ScrollBar scrollbar = Widget_GetData(w, self.prototype);
 
-	if (direction == SBD_HORIZONTAL) {
-		Widget_RemoveClass(w, "scrollbar-horizontal");
+	if (direction == LCUI_SCROLLBAR_HORIZONTAL) {
+		Widget_AddClass(w, "horizontal");
 	} else {
-		Widget_AddClass(w, "scrollbar-horizontal");
+		Widget_RemoveClass(w, "horizontal");
 	}
 	scrollbar->direction = direction;
 }
