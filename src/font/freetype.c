@@ -30,6 +30,7 @@
 
 #include "config.h"
 #include <LCUI_Build.h>
+#include <windows.h>
 #ifdef LCUI_FONT_ENGINE_FREETYPE
 #include <LCUI/types.h>
 #include <LCUI/util/linkedlist.h>
@@ -43,8 +44,8 @@
 #include FT_OUTLINE_H
 #include FT_BITMAP_H
 
-#define LCUI_FONT_RENDER_MODE	FT_RENDER_MODE_NORMAL
-#define LCUI_FONT_LOAD_FALGS	(FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT)
+#define LCUI_FONT_RENDER_MODE FT_RENDER_MODE_NORMAL
+#define LCUI_FONT_LOAD_FALGS (FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT)
 
 static struct {
 	FT_Library library;
@@ -55,23 +56,53 @@ static int FreeType_Open(const char *filepath, LCUI_Font **outfonts)
 	FT_Face face;
 	LCUI_Font font, *fonts;
 	int i, err, num_faces;
-
-	err = FT_New_Face(freetype.library, filepath, -1, &face);
+	DWORD size = 0;
+	FT_Byte *ftbytes = NULL;
+	const char delim[2] = "::";
+	int len = strlen(filepath);
+	char *path = (char *)malloc(strlen(filepath) + 1);
+	memcpy(path, filepath, strlen(filepath) + 1);
+	char *token = strtok(path, delim);
+	char *memo = "memo";
+	BOOL isMemo = FALSE;
+	if (strcmp(token, memo) == 0) {
+		isMemo = TRUE;
+		token = strtok(NULL, delim);
+		HRSRC hRes =
+		    FindResource(NULL, MAKEINTRESOURCE(atoi(token)), RT_RCDATA);
+		HGLOBAL hMem = LoadResource(NULL, hRes);
+		size = SizeofResource(NULL, hRes);
+		FT_Byte *resText = (FT_Byte *)LockResource(hMem);
+		ftbytes = (FT_Byte *)malloc(size);
+		memcpy(ftbytes, resText, size);
+		FreeResource(hMem);
+		err = FT_New_Memory_Face(freetype.library, ftbytes, size, -1,
+					 &face);
+	} else {
+		err = FT_New_Face(freetype.library, filepath, -1, &face);
+	}
 	if (err) {
 		*outfonts = NULL;
 		return -1;
 	}
 	num_faces = face->num_faces;
+
 	FT_Done_Face(face);
 	if (num_faces < 1) {
 		return 0;
 	}
-	fonts = malloc(sizeof(LCUI_FontRec*) * num_faces);
+	fonts = malloc(sizeof(LCUI_FontRec *) * num_faces);
 	if (!fonts) {
+		printf("ENOMEM \n");
 		return -ENOMEM;
 	}
 	for (i = 0; i < num_faces; ++i) {
-		err = FT_New_Face(freetype.library, filepath, i, &face);
+		if (isMemo == TRUE) {
+			err = FT_New_Memory_Face(freetype.library, ftbytes,
+						 size, i, &face);
+		} else {
+			err = FT_New_Face(freetype.library, filepath, i, &face);
+		}
 		if (err) {
 			fonts[i] = NULL;
 			continue;
@@ -96,7 +127,7 @@ static size_t Convert_FTGlyph(LCUI_FontBitmap *bmp, FT_GlyphSlot slot, int mode)
 	int error;
 	size_t size;
 	FT_BitmapGlyph bitmap_glyph;
-	FT_Glyph  glyph;
+	FT_Glyph glyph;
 
 	/* 从字形槽中提取一个字形图像
 	 * 请注意，创建的FT_Glyph对象必须与FT_Done_Glyph成对使用 */
@@ -131,36 +162,37 @@ static size_t Convert_FTGlyph(LCUI_FontBitmap *bmp, FT_GlyphSlot slot, int mode)
 	bmp->left = slot->metrics.horiBearingX >> 6;
 	bmp->rows = bitmap_glyph->bitmap.rows;
 	bmp->width = bitmap_glyph->bitmap.width;
-	bmp->advance.x = slot->metrics.horiAdvance >> 6;	/* 水平跨距 */
-	bmp->advance.y = slot->metrics.vertAdvance >> 6;	/* 垂直跨距 */
+	bmp->advance.x = slot->metrics.horiAdvance >> 6; /* 水平跨距 */
+	bmp->advance.y = slot->metrics.vertAdvance >> 6; /* 垂直跨距 */
 	/* 分配内存，用于保存字体位图 */
 	size = bmp->rows * bmp->width * sizeof(uchar_t);
-	bmp->buffer = (uchar_t*)malloc(size);
+	bmp->buffer = (uchar_t *)malloc(size);
 	if (!bmp->buffer) {
 		FT_Done_Glyph(glyph);
 		return -1;
 	}
 
 	switch (bitmap_glyph->bitmap.pixel_mode) {
-	    /* 8位灰度位图，直接拷贝 */
+		/* 8位灰度位图，直接拷贝 */
 	case FT_PIXEL_MODE_GRAY:
 		memcpy(bmp->buffer, bitmap_glyph->bitmap.buffer, size);
 		break;
-	    /* 单色点阵图，需要转换 */
-	case FT_PIXEL_MODE_MONO:
-	{
+		/* 单色点阵图，需要转换 */
+	case FT_PIXEL_MODE_MONO: {
 		FT_Bitmap bitmap;
 		FT_Int x, y;
 		uchar_t *bit_ptr, *byte_ptr;
 
 		FT_Bitmap_New(&bitmap);
-		/* 转换位图bitmap_glyph->bitmap至bitmap，1个像素占1个字节 */
-		FT_Bitmap_Convert(freetype.library, &bitmap_glyph->bitmap, &bitmap, 1);
+		/* 转换位图bitmap_glyph->bitmap至bitmap，1个像素占1个字节
+		 */
+		FT_Bitmap_Convert(freetype.library, &bitmap_glyph->bitmap,
+				  &bitmap, 1);
 		bit_ptr = bitmap.buffer;
 		byte_ptr = bmp->buffer;
 		for (y = 0; y < bmp->rows; ++y) {
 			for (x = 0; x < bmp->width; ++x) {
-				*byte_ptr = *bit_ptr ? 255:0;
+				*byte_ptr = *bit_ptr ? 255 : 0;
 				++byte_ptr, ++bit_ptr;
 			}
 		}
@@ -176,8 +208,8 @@ static size_t Convert_FTGlyph(LCUI_FontBitmap *bmp, FT_GlyphSlot slot, int mode)
 	return size;
 }
 
-static int FreeType_Render(LCUI_FontBitmap *bmp, wchar_t ch,
-			   int pixel_size, LCUI_Font font)
+static int FreeType_Render(LCUI_FontBitmap *bmp, wchar_t ch, int pixel_size,
+			   LCUI_Font font)
 {
 	int ret = 0;
 	FT_UInt index;
